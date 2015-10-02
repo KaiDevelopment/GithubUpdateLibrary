@@ -1,4 +1,4 @@
-package de.kaidev.library;
+package de.kaidev.githubupdatelibrary;
 
 import org.junit.Test;
 

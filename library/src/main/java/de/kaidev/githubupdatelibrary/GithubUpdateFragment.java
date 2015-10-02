@@ -1,4 +1,4 @@
-package de.kaidev.library;
+package de.kaidev.githubupdatelibrary;
 
 import android.app.Activity;
 import android.content.pm.PackageManager;
