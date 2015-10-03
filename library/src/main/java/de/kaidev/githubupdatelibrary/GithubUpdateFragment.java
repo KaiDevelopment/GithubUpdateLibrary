@@ -1,6 +1,8 @@
 package de.kaidev.githubupdatelibrary;
 
 import android.app.Activity;
+import android.app.Application;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -10,6 +12,8 @@ import android.util.Pair;
 
 import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -25,7 +29,7 @@ import java.net.URLConnection;
 /**
  * Created by Kai on 02.10.2015.
  */
-public class GithubUpdateFragment extends Fragment {
+public abstract class GithubUpdateFragment extends Fragment {
     interface UpdateCallbacks {
         void checkPreExecute();
         void checkException();
@@ -47,7 +51,7 @@ public class GithubUpdateFragment extends Fragment {
     private ASyncDownload taskDownload;
 
     @Override
-    public void onAttach(Activity activity) {
+    public void onAttach(Context activity) {
         super.onAttach(activity);
         if (!(activity instanceof UpdateCallbacks))
             throw new IllegalStateException("Activity must implement UpdateCallbacks");
@@ -78,6 +82,8 @@ public class GithubUpdateFragment extends Fragment {
         cancelDownload();
     }
 
+    abstract String getVersionName();
+
     public void startCheck(){
         System.out.println("UpdateFragment.startCheck");
         if (!runningCheck){
@@ -99,7 +105,7 @@ public class GithubUpdateFragment extends Fragment {
         return runningDownload;
     }
 
-    class ASyncCheck extends AsyncTask<Void, Void, String[]> {
+    class ASyncCheck extends AsyncTask<Void, Void, String> {
 
         boolean gotException = false;
 
@@ -112,65 +118,47 @@ public class GithubUpdateFragment extends Fragment {
         }
 
         @Override
-        protected String[] doInBackground(Void... params) {
+        protected String doInBackground(Void... params) {
             System.out.println("ASyncCheck.doInBackground");
-            String newestVersion = downloadHTTP(
-                    "https://dl.dropboxusercontent.com/s/vmbhygvvfz941a6/newestversion.txt?dl=0");
-            if (isCancelled()) return null;
-
-            String patchNotes = downloadHTTP(
-                    "https://dl.dropboxusercontent.com/s/fmniehotyypckws/patchnotes.txt?dl=0");
-            if (isCancelled()) return null;
-
-            String link = downloadHTTP(
-                    "https://dl.dropboxusercontent.com/s/yn0qxyjsvkeamwp/link.txt?dl=0");
-            if (isCancelled()) return null;
-            return new String[]{newestVersion, patchNotes, link};
-        }
-
-        private String downloadHTTP(String url){
             try {
-                HttpURLConnection httpURLConnection = (HttpURLConnection) new URL(url).openConnection();
-                httpURLConnection.setRequestMethod("GET");
-                httpURLConnection.connect();
-                InputStream inputStream = httpURLConnection.getInputStream();
-                String response = IOUtils.toString(inputStream, Charsets.UTF_8);
-                inputStream.close();
-                return response;
-            } catch (Exception e) {
+                return IOUtils.toString(
+                        new URL("https://api.github.com/repos/KaiDevelopment/VertretungsplanAppX/releases/latest"));
+            } catch (IOException e) {
                 e.printStackTrace();
+                cancel(true);
                 gotException = true;
-                this.cancel(true);
                 return null;
             }
         }
 
+
         @Override
-        protected void onPostExecute(String[] result) {
-            if (callbacks != null){
-                boolean needUpdate = false;
-                try {
-                    String versionName = getActivity().getPackageManager().getPackageInfo(getActivity().getPackageName(), 0).versionName;
-                    String[] localVersion = versionName.split("\\.");
-                    int[] localVersionInts = new int[localVersion.length];
-                    for (int i = 0; i < localVersion.length; i++){
-                        localVersionInts[i] = Integer.parseInt(localVersion[i]);
-                    }
+        protected void onPostExecute(String result) {
+            boolean needUpdate = false;
 
-                    String[] remoteVersion = result[0].split("\\.");
-                    int[] remoteVersionInts = new int[remoteVersion.length];
-                    for (int i = 0; i < remoteVersion.length; i++){
-                        remoteVersionInts[i] = Integer.parseInt(remoteVersion[i]);
-                    }
-
-                    needUpdate = remoteVersionInts[0] > localVersionInts[0] ||
-                            remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] > localVersionInts[1] ||
-                            remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] == localVersionInts[1] && remoteVersionInts[2] > localVersionInts[2];
-                } catch (PackageManager.NameNotFoundException e) {
-                    e.printStackTrace();
-                }
-                callbacks.checkPostExecute(result, needUpdate);
+            try {
+                JSONObject data = new JSONObject(result);
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
+
+            String versionName = getVersionName();
+            String[] localVersion = versionName.split("\\.");
+            int[] localVersionInts = new int[localVersion.length];
+            for (int i = 0; i < localVersion.length; i++){
+                localVersionInts[i] = Integer.parseInt(localVersion[i]);
+            }
+
+            String[] remoteVersion = result[0].split("\\.");
+            int[] remoteVersionInts = new int[remoteVersion.length];
+            for (int i = 0; i < remoteVersion.length; i++){
+                remoteVersionInts[i] = Integer.parseInt(remoteVersion[i]);
+            }
+
+            needUpdate = remoteVersionInts[0] > localVersionInts[0] ||
+                    remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] > localVersionInts[1] ||
+                    remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] == localVersionInts[1] && remoteVersionInts[2] > localVersionInts[2];
+            callbacks.checkPostExecute(result, needUpdate);
             runningCheck = false;
         }
 
