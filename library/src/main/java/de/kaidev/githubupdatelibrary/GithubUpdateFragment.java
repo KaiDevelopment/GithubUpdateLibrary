@@ -10,6 +10,10 @@ import android.os.Environment;
 import android.support.v4.app.Fragment;
 import android.util.Pair;
 
+import com.annimon.stream.Collectors;
+import com.annimon.stream.Stream;
+import com.annimon.stream.function.Supplier;
+
 import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
 import org.json.JSONException;
@@ -25,6 +29,10 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Created by Kai on 02.10.2015.
@@ -33,7 +41,7 @@ public abstract class GithubUpdateFragment extends Fragment {
     interface UpdateCallbacks {
         void checkPreExecute();
         void checkException();
-        void checkPostExecute(String[] data, boolean needUpdate);
+        void checkPostExecute(boolean needUpdate, String remoteVersion, String name);
         void checkClearUI();
         void downloadPreExecute();
         void downloadProgressUpdate(Pair<Integer, Integer> progress);
@@ -84,6 +92,8 @@ public abstract class GithubUpdateFragment extends Fragment {
 
     abstract String getVersionName();
 
+    abstract URL getGithubUrl();
+
     public void startCheck(){
         System.out.println("UpdateFragment.startCheck");
         if (!runningCheck){
@@ -121,8 +131,7 @@ public abstract class GithubUpdateFragment extends Fragment {
         protected String doInBackground(Void... params) {
             System.out.println("ASyncCheck.doInBackground");
             try {
-                return IOUtils.toString(
-                        new URL("https://api.github.com/repos/KaiDevelopment/VertretungsplanAppX/releases/latest"));
+                return IOUtils.toString(getGithubUrl());
             } catch (IOException e) {
                 e.printStackTrace();
                 cancel(true);
@@ -138,38 +147,34 @@ public abstract class GithubUpdateFragment extends Fragment {
 
             try {
                 JSONObject data = new JSONObject(result);
+                String tag_name = data.getString("tag_name").substring(1);
+
+                List<Integer> localVersionInts = Stream.of(Arrays.asList(getVersionName().split("\\.")))
+                        .map(Integer::parseInt)
+                        .collect(Collectors.toList());
+
+                List<Integer> remoteVersionInts = Stream.of(Arrays.asList(tag_name.split("\\.")))
+                        .map(Integer::parseInt)
+                        .collect(Collectors.toList());
+
+                needUpdate = remoteVersionInts.get(0) > localVersionInts.get(0) ||
+                        Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && remoteVersionInts.get(1) > localVersionInts.get(1) ||
+                        Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && Objects.equals(remoteVersionInts.get(1), localVersionInts.get(1)) && remoteVersionInts.get(2) > localVersionInts.get(2);
+
+                callbacks.checkPostExecute(needUpdate, tag_name, getVersionName());
             } catch (JSONException e) {
                 e.printStackTrace();
+                callbacks.checkException();
             }
-
-            String versionName = getVersionName();
-            String[] localVersion = versionName.split("\\.");
-            int[] localVersionInts = new int[localVersion.length];
-            for (int i = 0; i < localVersion.length; i++){
-                localVersionInts[i] = Integer.parseInt(localVersion[i]);
-            }
-
-            String[] remoteVersion = result[0].split("\\.");
-            int[] remoteVersionInts = new int[remoteVersion.length];
-            for (int i = 0; i < remoteVersion.length; i++){
-                remoteVersionInts[i] = Integer.parseInt(remoteVersion[i]);
-            }
-
-            needUpdate = remoteVersionInts[0] > localVersionInts[0] ||
-                    remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] > localVersionInts[1] ||
-                    remoteVersionInts[0] == localVersionInts[0] && remoteVersionInts[1] == localVersionInts[1] && remoteVersionInts[2] > localVersionInts[2];
-            callbacks.checkPostExecute(result, needUpdate);
             runningCheck = false;
         }
 
         @Override
         protected void onCancelled() {
-            if (callbacks != null){
-                if (gotException) {
-                    callbacks.checkException();
-                } else {
-                    callbacks.checkClearUI();
-                }
+            if (gotException) {
+                callbacks.checkException();
+            } else {
+                callbacks.checkClearUI();
             }
             runningCheck = false;
         }
