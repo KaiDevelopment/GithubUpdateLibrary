@@ -30,6 +30,8 @@ import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.List;
 
+import javax.net.ssl.HttpsURLConnection;
+
 /**
  * Created by Kai on 02.10.2015.
  */
@@ -136,7 +138,7 @@ public class GithubUpdateFragment extends Fragment {
         protected String doInBackground(Void... params) {
             System.out.println("ASyncCheck.doInBackground");
             try {
-                return IOUtils.toString(new URL(link));
+                return IOUtils.toString(new URL(link).openConnection().getInputStream());
             } catch (IOException e) {
                 e.printStackTrace();
                 cancel(true);
@@ -167,7 +169,7 @@ public class GithubUpdateFragment extends Fragment {
                 JSONArray assets = data.getJSONArray("assets");
                 JSONObject entry = assets.getJSONObject(0);
                 String link = entry.getString("browser_download_url");
-                callbacks.checkPostExecute(needUpdate, tag_name, versionName, link);
+                callbacks.checkPostExecute(true, tag_name, versionName, link);
             } catch (JSONException e) {
                 e.printStackTrace();
                 callbacks.checkException();
