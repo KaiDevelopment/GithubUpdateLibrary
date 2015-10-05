@@ -1,7 +1,5 @@
 package de.kaidev.githubupdatelibrary;
 
-import android.app.Activity;
-import android.app.Application;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
@@ -12,10 +10,10 @@ import android.util.Pair;
 
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
-import com.annimon.stream.function.Supplier;
+import com.annimon.stream.Objects;
 
-import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -26,29 +24,29 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Created by Kai on 02.10.2015.
  */
-public abstract class GithubUpdateFragment extends Fragment {
-    interface UpdateCallbacks {
+public class GithubUpdateFragment extends Fragment {
+    public interface UpdateCallbacks {
         void checkPreExecute();
         void checkException();
-        void checkPostExecute(boolean needUpdate, String remoteVersion, String name);
+        void checkPostExecute(boolean needUpdate, String remoteVersion, String name, String link);
         void checkClearUI();
         void downloadPreExecute();
-        void downloadProgressUpdate(Pair<Integer, Integer> progress);
+        void downloadProgressUpdate(DownloadProgress progress);
         void downloadException();
         void downloadPostExecute(File result);
         void downloadClearUI();
     }
+
+    String versionName;
 
     private UpdateCallbacks callbacks;
 
@@ -64,6 +62,12 @@ public abstract class GithubUpdateFragment extends Fragment {
         if (!(activity instanceof UpdateCallbacks))
             throw new IllegalStateException("Activity must implement UpdateCallbacks");
         callbacks = (UpdateCallbacks) activity;
+        try {
+            versionName = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+            throw new Error("Cant find Package");
+        }
 
     }
 
@@ -90,14 +94,10 @@ public abstract class GithubUpdateFragment extends Fragment {
         cancelDownload();
     }
 
-    abstract String getVersionName();
-
-    abstract URL getGithubUrl();
-
-    public void startCheck(){
+    public void startCheck(String link){
         System.out.println("UpdateFragment.startCheck");
         if (!runningCheck){
-            taskCheck = new ASyncCheck();
+            taskCheck = new ASyncCheck(link);
             taskCheck.execute();
             runningCheck = true;
         }
@@ -117,7 +117,12 @@ public abstract class GithubUpdateFragment extends Fragment {
 
     class ASyncCheck extends AsyncTask<Void, Void, String> {
 
+        private final String link;
         boolean gotException = false;
+
+        public ASyncCheck(String link) {
+            this.link = link;
+        }
 
         @Override
         protected void onPreExecute() {
@@ -131,7 +136,7 @@ public abstract class GithubUpdateFragment extends Fragment {
         protected String doInBackground(Void... params) {
             System.out.println("ASyncCheck.doInBackground");
             try {
-                return IOUtils.toString(getGithubUrl());
+                return IOUtils.toString(new URL(link));
             } catch (IOException e) {
                 e.printStackTrace();
                 cancel(true);
@@ -143,13 +148,11 @@ public abstract class GithubUpdateFragment extends Fragment {
 
         @Override
         protected void onPostExecute(String result) {
-            boolean needUpdate = false;
-
             try {
                 JSONObject data = new JSONObject(result);
                 String tag_name = data.getString("tag_name").substring(1);
 
-                List<Integer> localVersionInts = Stream.of(Arrays.asList(getVersionName().split("\\.")))
+                List<Integer> localVersionInts = Stream.of(Arrays.asList(versionName.split("\\.")))
                         .map(Integer::parseInt)
                         .collect(Collectors.toList());
 
@@ -157,11 +160,14 @@ public abstract class GithubUpdateFragment extends Fragment {
                         .map(Integer::parseInt)
                         .collect(Collectors.toList());
 
-                needUpdate = remoteVersionInts.get(0) > localVersionInts.get(0) ||
+                boolean needUpdate = remoteVersionInts.get(0) > localVersionInts.get(0) ||
                         Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && remoteVersionInts.get(1) > localVersionInts.get(1) ||
                         Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && Objects.equals(remoteVersionInts.get(1), localVersionInts.get(1)) && remoteVersionInts.get(2) > localVersionInts.get(2);
 
-                callbacks.checkPostExecute(needUpdate, tag_name, getVersionName());
+                JSONArray assets = data.getJSONArray("assets");
+                JSONObject entry = assets.getJSONObject(0);
+                String link = entry.getString("browser_download_url");
+                callbacks.checkPostExecute(needUpdate, tag_name, versionName, link);
             } catch (JSONException e) {
                 e.printStackTrace();
                 callbacks.checkException();
@@ -186,7 +192,6 @@ public abstract class GithubUpdateFragment extends Fragment {
     }
 
     public void startDownload(String link, String version){
-        System.out.println("link = [" + link + "], version = [" + version + "]");
         if (!runningDownload){
             taskDownload = new ASyncDownload(link, version);
             taskDownload.execute();
@@ -202,7 +207,7 @@ public abstract class GithubUpdateFragment extends Fragment {
         }
     }
 
-    class ASyncDownload extends AsyncTask<Void, Pair<Integer, Integer>, File>{
+    class ASyncDownload extends AsyncTask<Void, DownloadProgress, File>{
 
         private final String link;
         private final String version;
@@ -218,9 +223,7 @@ public abstract class GithubUpdateFragment extends Fragment {
 
         @Override
         protected void onPreExecute() {
-            if (callbacks != null){
-                callbacks.downloadPreExecute();
-            }
+            callbacks.downloadPreExecute();
         }
 
         @Override
@@ -241,16 +244,16 @@ public abstract class GithubUpdateFragment extends Fragment {
 
                 int total = 0;
                 int count;
-                publishProgress(new Pair<>(-2, fileSize));
+                publishProgress(new DownloadProgress(DownloadStatus.DownloadStart, fileSize, 0));
                 while (((count = input.read(data)) != -1) && !isCancelled()){
                     total += count;
                     output.write(data, 0, count);
-                    publishProgress(new Pair<>(total, fileSize));
+                    publishProgress(new DownloadProgress(DownloadStatus.DownloadRunning, fileSize, total));
                 }
                 if (isCancelled()){
                     file.delete();
                 } else {
-                    publishProgress(new Pair<>(-1, -1));
+                    publishProgress(new DownloadProgress(DownloadStatus.DownloadFinished, 0, 0));
                 }
                 return file;
             } catch (Exception e){
@@ -260,51 +263,33 @@ public abstract class GithubUpdateFragment extends Fragment {
                 file.delete();
                 return null;
             } finally {
-                if (output!=null){
-                    try {
-                        output.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                if (input != null){
-                    try {
-                        input.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+                IOUtils.closeQuietly(output);
+                IOUtils.closeQuietly(input);
             }
         }
 
-        @SafeVarargs
         @Override
-        protected final void onProgressUpdate(Pair<Integer, Integer>... values) {
-            if (callbacks != null){
-                callbacks.downloadProgressUpdate(values[0]);
-            }
+        protected final void onProgressUpdate(DownloadProgress... values) {
+            callbacks.downloadProgressUpdate(values[0]);
         }
 
         @Override
         protected void onPostExecute(File result) {
             System.out.println("ASyncDownload.onPostExecute");
-            if (callbacks != null){
-                callbacks.downloadPostExecute(result);
-            }
+            callbacks.downloadPostExecute(result);
             runningDownload = false;
         }
 
         @Override
         protected void onCancelled() {
             System.out.println("ASyncDownload.onCancelled");
-            if (callbacks != null){
-                if (gotException) {
-                    callbacks.downloadException();
-                } else {
-                    callbacks.downloadClearUI();
-                }
+            if (gotException) {
+                callbacks.downloadException();
+            } else {
+                callbacks.downloadClearUI();
             }
             runningDownload = false;
         }
     }
+
 }
