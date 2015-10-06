@@ -6,7 +6,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.v4.app.Fragment;
-import android.util.Pair;
 
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
@@ -24,13 +23,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Arrays;
 import java.util.List;
-
-import javax.net.ssl.HttpsURLConnection;
 
 /**
  * Created by Kai on 02.10.2015.
@@ -169,7 +165,9 @@ public class GithubUpdateFragment extends Fragment {
                 JSONArray assets = data.getJSONArray("assets");
                 JSONObject entry = assets.getJSONObject(0);
                 String link = entry.getString("browser_download_url");
-                callbacks.checkPostExecute(true, tag_name, versionName, link);
+
+                String name = data.getString("name");
+                callbacks.checkPostExecute(needUpdate, tag_name, name, link);
             } catch (JSONException e) {
                 e.printStackTrace();
                 callbacks.checkException();
