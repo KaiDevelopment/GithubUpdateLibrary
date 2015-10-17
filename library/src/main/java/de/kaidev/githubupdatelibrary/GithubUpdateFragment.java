@@ -134,7 +134,7 @@ public class GithubUpdateFragment extends Fragment {
         protected String doInBackground(Void... params) {
             System.out.println("ASyncCheck.doInBackground");
             try {
-                return IOUtils.toString(new URL(link).openConnection().getInputStream());
+                return IOUtils.toString(new URL(link));
             } catch (IOException e) {
                 e.printStackTrace();
                 cancel(true);
