@@ -154,7 +154,7 @@ public class GithubUpdateFragment extends Fragment {
                         .map(Integer::parseInt)
                         .collect(Collectors.toList());
 
-                List<Integer> remoteVersionInts = Stream.of(Arrays.asList(tag_name.split("\\.")))
+                List<Integer> remoteVersionInts = Stream.of(tag_name.split("\\."))
                         .map(Integer::parseInt)
                         .collect(Collectors.toList());
 
