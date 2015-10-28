@@ -166,7 +166,7 @@ public class GithubUpdateFragment extends Fragment {
                 JSONObject entry = assets.getJSONObject(0);
                 String link = entry.getString("browser_download_url");
 
-                String name = data.getString("name");
+                String name = data.getString("body");
                 callbacks.checkPostExecute(needUpdate, tag_name, name, link);
             } catch (JSONException e) {
                 e.printStackTrace();
