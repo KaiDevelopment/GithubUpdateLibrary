@@ -78,7 +78,6 @@ public class GithubUpdateFragment extends Fragment {
 
     @Override
     public void onPause() {
-        System.out.println("UpdateFragment.onPause");
         super.onPause();
         if (!getActivity().isChangingConfigurations()) {
             cancelCheck();
@@ -94,7 +93,6 @@ public class GithubUpdateFragment extends Fragment {
     }
 
     public void startCheck(String link){
-        System.out.println("UpdateFragment.startCheck");
         if (!runningCheck){
             taskCheck = new ASyncCheck(link);
             taskCheck.execute();
@@ -103,7 +101,6 @@ public class GithubUpdateFragment extends Fragment {
     }
 
     public void cancelCheck() {
-        System.out.println("UpdateFragment.cancelCheck");
         if (runningCheck){
             taskCheck.cancel(true);
             taskCheck = null;
@@ -125,7 +122,6 @@ public class GithubUpdateFragment extends Fragment {
 
         @Override
         protected void onPreExecute() {
-            System.out.println("ASyncCheck.onPreExecute");
             if (callbacks != null){
                 callbacks.checkPreExecute();
             }
@@ -133,7 +129,6 @@ public class GithubUpdateFragment extends Fragment {
 
         @Override
         protected String doInBackground(Void... params) {
-            System.out.println("ASyncCheck.doInBackground");
             try {
                 return IOUtils.toString(new URL(link));
             } catch (IOException e) {
