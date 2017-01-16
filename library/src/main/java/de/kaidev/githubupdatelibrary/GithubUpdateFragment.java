@@ -1,5 +1,7 @@
 package de.kaidev.githubupdatelibrary;
 
+import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
@@ -28,6 +30,12 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import com.karumi.*;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.listener.PermissionGrantedResponse;
+import com.karumi.dexter.listener.single.CompositePermissionListener;
+import com.karumi.dexter.listener.single.DialogOnDeniedPermissionListener;
+import com.karumi.dexter.listener.single.EmptyPermissionListener;
 
 /**
  * Created by Kai on 02.10.2015.
@@ -111,12 +119,12 @@ public class GithubUpdateFragment extends Fragment {
         return runningDownload;
     }
 
-    class ASyncCheck extends AsyncTask<Void, Void, String> {
+    private class ASyncCheck extends AsyncTask<Void, Void, String> {
 
         private final String link;
         boolean gotException = false;
 
-        public ASyncCheck(String link) {
+        ASyncCheck(String link) {
             this.link = link;
         }
 
@@ -182,16 +190,34 @@ public class GithubUpdateFragment extends Fragment {
         }
     }
 
-
     public boolean isRunningCheck(){
         return runningCheck;
     }
 
     public void startDownload(String link, String version){
         if (!runningDownload){
-            taskDownload = new ASyncDownload(link, version);
-            taskDownload.execute();
-            runningDownload = true;
+
+            Activity activity = getActivity();
+            Dexter.withActivity(activity)
+                    .withPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    .withListener(new CompositePermissionListener(
+                            DialogOnDeniedPermissionListener.Builder.withContext(activity)
+                                    .withTitle("Speicherberechtigung")
+                                    .withMessage("Die Berechtigung wird benötigt um das Update herunterzuladen")
+                                    .withButtonText(android.R.string.ok)
+                                    .build(),
+                            new EmptyPermissionListener(){
+                                @Override
+                                public void onPermissionGranted(PermissionGrantedResponse response) {
+                                    taskDownload = new ASyncDownload(link, version);
+                                    taskDownload.execute();
+                                    runningDownload = true;
+                                }
+                            }))
+                    .check();
+//            taskDownload = new ASyncDownload(link, version);
+//            taskDownload.execute();
+//            runningDownload = true;
         }
     }
 
@@ -203,7 +229,7 @@ public class GithubUpdateFragment extends Fragment {
         }
     }
 
-    class ASyncDownload extends AsyncTask<Void, DownloadProgress, File>{
+    private class ASyncDownload extends AsyncTask<Void, DownloadProgress, File>{
 
         private final String link;
         private final String version;
@@ -212,7 +238,7 @@ public class GithubUpdateFragment extends Fragment {
 
         boolean gotException = false;
 
-        public ASyncDownload(String link, String version) {
+        ASyncDownload(String link, String version) {
             this.link = link;
             this.version = version;
         }

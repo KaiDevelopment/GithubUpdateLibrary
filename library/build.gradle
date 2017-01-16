@@ -29,4 +29,5 @@ dependencies {
     compile 'com.android.support:appcompat-v7:25.1.0'
     compile 'commons-io:commons-io:2.4'
     compile 'com.annimon:stream:1.0.3'
+    compile 'com.karumi:dexter:3.0.0'
 }
