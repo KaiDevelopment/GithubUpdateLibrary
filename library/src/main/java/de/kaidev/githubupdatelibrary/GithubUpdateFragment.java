@@ -29,6 +29,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import com.karumi.*;
 import com.karumi.dexter.Dexter;
@@ -154,17 +155,10 @@ public class GithubUpdateFragment extends Fragment {
                 JSONObject data = new JSONObject(result);
                 String tag_name = data.getString("tag_name").substring(1);
 
-                List<Integer> localVersionInts = Stream.of(Arrays.asList(versionName.split("\\.")))
-                        .map(Integer::parseInt)
-                        .collect(Collectors.toList());
+                Version localVersion = Version.parseVersion(versionName);
+                Version remoteVersion = Version.parseVersion(tag_name);
 
-                List<Integer> remoteVersionInts = Stream.of(tag_name.split("\\."))
-                        .map(Integer::parseInt)
-                        .collect(Collectors.toList());
-
-                boolean needUpdate = remoteVersionInts.get(0) > localVersionInts.get(0) ||
-                        Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && remoteVersionInts.get(1) > localVersionInts.get(1) ||
-                        Objects.equals(remoteVersionInts.get(0), localVersionInts.get(0)) && Objects.equals(remoteVersionInts.get(1), localVersionInts.get(1)) && remoteVersionInts.get(2) > localVersionInts.get(2);
+                boolean needUpdate = remoteVersion.compareTo(localVersion) > 0;
 
                 JSONArray assets = data.getJSONArray("assets");
                 JSONObject entry = assets.getJSONObject(0);
